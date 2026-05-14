@@ -2,9 +2,8 @@ const express = require('express')
 const router = express.Router()
 const { db } = require('../db')
 
-
 router.get('/', (req, res) => {
-  const page = Math.max(parseInt(req.query.page)) || 0
+  const page = Math.max(parseInt(req.query.page) || 0, 0)
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100)
 
   // First BUG, I would create the variable to handle offset
@@ -39,12 +38,10 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'name and tag_number are required' })
   }
 
-  // Now we replace the if-statement, we want to check if it's not null and  not undefined
-  if (paddock_id != null && paddock_id != undefined) {
-    db.prepare(
-      'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
-    ).run(paddock_id)
-  }
+  // For this one we'd want to have like our data
+  // being inserted before we can formally do the update count so that tag_numbers is duplicated which causes
+  // Full atomicity is later enforced using database transactions, and this process will help the program
+  // reduce the risk of inconsistent database state.
 
   const result = db
     .prepare(
@@ -57,6 +54,13 @@ router.post('/', (req, res) => {
       date_of_birth ?? null,
       paddock_id ?? null
     )
+  // Now we replace the if-statement, we want to check if it's not null and  not undefined. Now for this let's handle the cases where the paddock_id has a better if-statement that handle
+
+  if (paddock_id !== null && paddock_id !== undefined) {
+    db.prepare(
+      'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
+    ).run(paddock_id)
+  }
 
   const animal = db
     .prepare('SELECT * FROM animals WHERE id = ?')
