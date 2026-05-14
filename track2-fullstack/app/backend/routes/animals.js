@@ -91,13 +91,25 @@ router.put('/:id', (req, res) => {
       'paddock_id' in req.body ? req.body.paddock_id : animal.paddock_id
   }
 
+  // Next thing we need to fix for bug as it doesn't decrement the old paddock count which is a issue
+  // I brought up audit.md and we need to change the conditonal statement as should not check for truthiness
+  // which was a bug I fixed earlier so we can use that as a way for us to fix this conditional statement
+
   if (updates.paddock_id !== animal.paddock_id) {
-    if (updates.paddock_id) {
+    if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
+      db.prepare(
+        'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
+      ).run(animal.paddock_id)
+    }
+
+    if (updates.paddock_id !== null && updates.paddock_id !== undefined) {
       db.prepare(
         'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
       ).run(updates.paddock_id)
     }
   }
+
+
 
   db.prepare(
     `
@@ -126,7 +138,7 @@ router.delete('/:id', (req, res) => {
     .get(req.params.id)
   if (!animal) return res.status(404).json({ error: 'Animal not found' })
 
-  if (animal.paddock_id) {
+  if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
     db.prepare(
       'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
     ).run(animal.paddock_id)
