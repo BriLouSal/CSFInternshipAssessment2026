@@ -11,7 +11,7 @@ router.get('/', (req, res) => {
   // This will help fix the N + 1 queries issue
 
   // This prevents inconsistent data in the long run
-  // and allows for faster performance as thousands 
+  // and allows for faster performance as thousands
   // of queries will be sent rather than one efficent
   // query
 
@@ -236,6 +236,62 @@ router.post('/:id/health-events', (req, res) => {
     .prepare('SELECT * FROM health_events WHERE id = ?')
     .get(result.lastInsertRowid)
   res.status(201).json(event)
+})
+
+/**
+ * Description: Log a weight measurement for an animal.
+ * @author Brian Louis Salinas
+ */
+router.post('/:id/weights', (req, res) => {
+  // - [ ] `POST /animals/{id}/weights` creates a weight record and returns 201
+  // So we create a new router for this event
+  const animal = db
+    .prepare('SELECT * FROM animals WHERE id = ?')
+    .get(req.params.id)
+  // If animal is not on the database then return error 404
+
+  if (!animal) {
+    return res.status(404).json({ error: 'Animal not found' })
+  }
+  // Request body
+  const { weight_kg, date, notes } = req.body
+  const weight = Number(weight_kg)
+
+  // returns 422 if `weight_kg` is missing or non-positive
+  if (
+    weight_kg === undefined ||
+    weight_kg === null ||
+    !Number.isFinite(weight) ||
+    weight <= 0
+  ) {
+    return res.status(422).json({
+      error: 'weight_kg is required and must be positive'
+    })
+  }
+
+  if (!date) {
+    return res.status(400).json({ error: 'date is required' })
+  }
+
+  const result = db
+    .prepare(
+      'INSERT INTO animals (name, tag_number, breed, date_of_birth, paddock_id) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(req.params.id, Number(weight_kg), date, notes ?? null)
+  const result = db
+    .prepare(
+      `
+      INSERT INTO weights (animal_id, weight_kg, date, notes)
+      VALUES (?, ?, ?, ?)
+    `
+    )
+    .run(req.params.id, weight, date, notes ?? null)
+
+  const weightRecord = db
+    .prepare('SELECT * FROM weights WHERE id = ?')
+    .get(result.lastInsertRowid)
+
+  return res.status(201).json(weightRecord)
 })
 
 module.exports = router
