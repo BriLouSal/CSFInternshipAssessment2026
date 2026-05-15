@@ -68,7 +68,6 @@ router.post('/', (req, res) => {
       .prepare('SELECT * FROM animals WHERE id = ?')
       .get(result.lastInsertRowid)
     res.json(animal)
-  
   } catch (error) {
     // Return API reponse when unique constraint is violated for tag_number
     if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -104,38 +103,45 @@ router.put('/:id', (req, res) => {
       'paddock_id' in req.body ? req.body.paddock_id : animal.paddock_id
   }
 
-  // Next thing we need to fix for bug as it doesn't decrement the old paddock count which is a issue
-  // I brought up audit.md and we need to change the conditonal statement as should not check for truthiness
-  // which was a bug I fixed earlier so we can use that as a way for us to fix this conditional statement
+  // ATOMICITY FIX:
+  // For this one we're gonna add transaction handling
+  // If either operation fails, SQLite rolls back all changes,
+  // preserving database consistency and integrity.
 
-  if (updates.paddock_id !== animal.paddock_id) {
-    if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
-      db.prepare(
-        'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
-      ).run(animal.paddock_id)
+  const updateAnimalData = db.transaction(() => {
+    // Next thing we need to fix for bug as it doesn't decrement the old paddock count which is a issue
+    // I brought up audit.md and we need to change the conditonal statement as should not check for truthiness
+    // which was a bug I fixed earlier so we can use that as a way for us to fix this conditional statement
+
+    if (updates.paddock_id !== animal.paddock_id) {
+      if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
+        db.prepare(
+          'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
+        ).run(animal.paddock_id)
+      }
+
+      if (updates.paddock_id !== null && updates.paddock_id !== undefined) {
+        db.prepare(
+          'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
+        ).run(updates.paddock_id)
+      }
     }
-
-    if (updates.paddock_id !== null && updates.paddock_id !== undefined) {
-      db.prepare(
-        'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
-      ).run(updates.paddock_id)
-    }
-  }
-
-  db.prepare(
-    `
+    db.prepare(
+      `
     UPDATE animals
     SET name = ?, tag_number = ?, breed = ?, date_of_birth = ?, paddock_id = ?
     WHERE id = ?
   `
-  ).run(
-    updates.name,
-    updates.tag_number,
-    updates.breed,
-    updates.date_of_birth,
-    updates.paddock_id,
-    req.params.id
-  )
+    ).run(
+      updates.name,
+      updates.tag_number,
+      updates.breed,
+      updates.date_of_birth,
+      updates.paddock_id,
+      req.params.id
+    )
+  })
+  updateAnimalData()
 
   const updated = db
     .prepare('SELECT * FROM animals WHERE id = ?')
@@ -149,13 +155,19 @@ router.delete('/:id', (req, res) => {
     .get(req.params.id)
   if (!animal) return res.status(404).json({ error: 'Animal not found' })
 
-  if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
-    db.prepare(
-      'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
-    ).run(animal.paddock_id)
-  }
+  //  ATOMICITY FIX:
+  // Similar to the updateAnimalData
 
-  db.prepare('DELETE FROM animals WHERE id = ?').run(req.params.id)
+  const updateAnimalDataDelete = db.transaction(() => {
+    if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
+      db.prepare(
+        'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
+      ).run(animal.paddock_id)
+    }
+    db.prepare('DELETE FROM animals WHERE id = ?').run(req.params.id)
+  })
+  updateAnimalDataDelete()
+
   res.json({ message: 'deleted' })
 })
 
