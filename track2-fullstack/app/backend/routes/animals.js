@@ -3,30 +3,60 @@ const router = express.Router()
 const { db } = require('../db')
 
 router.get('/', (req, res) => {
-  const page = Math.max(parseInt(req.query.page) || 0, 0)
-  const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100)
-
   // First BUG, I would create the variable to handle offset
   // and then we replace .all(limit,page) -> .all(limit, offset)
+  const page = Math.max(parseInt(req.query.page) || 0, 0)
+  const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100)
   const offset = page * limit
+  // This will help fix the N + 1 queries issue
 
-  const animals = db
-    .prepare('SELECT * FROM animals LIMIT ? OFFSET ?')
+  // This prevents inconsistent data in the long run
+  // and allows for faster performance as thousands 
+  // of queries will be sent rather than one efficent
+  // query
+
+  const rows = db
+    .prepare(
+      `
+    SELECT
+      animals.*,
+      health_events.id AS latest_health_event_id,
+      health_events.event_type AS latest_health_event_type,
+      health_events.notes AS latest_health_event_notes,
+      health_events.date AS latest_health_event_date,
+      health_events.vet_name AS latest_health_event_vet_name
+    FROM animals
+    LEFT JOIN health_events
+      ON health_events.id = (
+        SELECT id
+        FROM health_events
+        WHERE health_events.animal_id = animals.id
+        ORDER BY date DESC
+        LIMIT 1
+      )
+    LIMIT ? OFFSET ?
+  `
+    )
     .all(limit, offset)
 
-  const result = animals.map(animal => {
-    const latestEvent = db
-      .prepare(
-        `
-      SELECT * FROM health_events
-      WHERE animal_id = ?
-      ORDER BY date DESC
-      LIMIT 1
-    `
-      )
-      .get(animal.id)
-    return { ...animal, latest_health_event: latestEvent ?? null }
-  })
+  const result = rows.map(row => ({
+    id: row.id,
+    name: row.name,
+    tag_number: row.tag_number,
+    breed: row.breed,
+    date_of_birth: row.date_of_birth,
+    paddock_id: row.paddock_id,
+    latest_health_event: row.latest_health_event_id
+      ? {
+          id: row.latest_health_event_id,
+          animal_id: row.id,
+          event_type: row.latest_health_event_type,
+          notes: row.latest_health_event_notes,
+          date: row.latest_health_event_date,
+          vet_name: row.latest_health_event_vet_name
+        }
+      : null
+  }))
 
   res.json(result)
 })
