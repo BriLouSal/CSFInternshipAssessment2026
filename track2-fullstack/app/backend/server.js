@@ -7,7 +7,9 @@ const paddocksRouter = require('./routes/paddocks');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
+// Add a limit to prevent JSON huge payloads that'll cause the server to slow down or wastes memory
+
+app.use(express.json({ limit: '50kb' }))
 app.use(express.static(path.join(__dirname, '../frontend')));
 
 app.use('/api/animals', animalsRouter);

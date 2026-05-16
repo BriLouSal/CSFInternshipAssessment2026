@@ -326,8 +326,15 @@ router.post('/:id/weights', (req, res) => {
   }
   // Request body
   const { weight_kg, date, notes } = req.body
-  const weight = Number(weight_kg)
-
+  // Add a defensive style programming here, this constant is meant to fix any sneak through the Number(weight_kg)
+  // which could pose a threat as we don't want [45] as the number
+  const isInvalidWeight =
+    weight_kg === undefined ||
+    weight_kg === null ||
+    Array.isArray(weight_kg) ||
+    typeof weight_kg === 'object' ||
+    (typeof weight_kg === 'string' && weight_kg.trim() === '')
+  const weight = isInvalidWeight ? NaN : Number(weight_kg)
   // returns 422 if `weight_kg` is missing or non-positive
   if (
     weight_kg === undefined ||
