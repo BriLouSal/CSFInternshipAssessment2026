@@ -129,11 +129,19 @@
     <script>
       const params = new URLSearchParams(window.location.search);
       const animalId = params.get("id");
+      if (!/^\d+$/.test(animalId || "")) {
+        document.getElementById("animal-detail").innerHTML =
+          '<p class="empty">Invalid animal id.</p>';
+
+        throw new Error("Invalid animal id");
+      }
+      // Add a defensive measure that prevents untrusted data from entering dangerous context
+      const safeAnimalId = encodeURIComponent(animalId);
 
       let weightChart = null;
 
       async function load() {
-        const animal = await api.get(`/animals/${animalId}`);
+        const animal = await api.get(`/animals/${safeAnimalId}`);
 
         document.title = `${animal.name} — FarmTracker`;
 
@@ -161,7 +169,7 @@
       }
 
       async function loadEvents() {
-        const events = await api.get(`/animals/${animalId}/health-events`);
+        const events = await api.get(`/animals/${safeAnimalId}/health-events`);
         const tbody = document.getElementById("events-body");
 
         tbody.innerHTML = events.length
@@ -181,7 +189,7 @@
       }
 
       async function loadWeights() {
-        const weights = await api.get(`/animals/${animalId}/weights`);
+        const weights = await api.get(`/animals/${safeAnimalId}/weights`);
 
         const tbody = document.getElementById("weights-body");
         const latestWeight = document.getElementById("latest-weight");
@@ -301,7 +309,7 @@
 
           try {
             const createdEvent = await api.post(
-              `/animals/${animalId}/health-events`,
+              `/animals/${safeAnimalId}/health-events`,
               data,
             );
 
@@ -337,7 +345,7 @@
 
           try {
             const createdWeight = await api.post(
-              `/animals/${animalId}/weights`,
+              `/animals/${safeAnimalId}/weights`,
               data,
             );
 
