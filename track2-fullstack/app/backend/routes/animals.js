@@ -275,11 +275,6 @@ router.post('/:id/weights', (req, res) => {
 
   const result = db
     .prepare(
-      'INSERT INTO animals (name, tag_number, breed, date_of_birth, paddock_id) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(req.params.id, Number(weight_kg), date, notes ?? null)
-  const result = db
-    .prepare(
       `
       INSERT INTO weights (animal_id, weight_kg, date, notes)
       VALUES (?, ?, ?, ?)
@@ -292,6 +287,35 @@ router.post('/:id/weights', (req, res) => {
     .get(result.lastInsertRowid)
 
   return res.status(201).json(weightRecord)
+})
+
+/**
+ * Description: Grabs the weight history for animals
+ * @author Brian Louis Salinas
+ */
+router.get('/:id/weights', (req, res) => {
+  const animal = db
+    .prepare('SELECT * FROM animals WHERE id = ?')
+    .get(req.params.id)
+
+  // If Animal does not exist, then return error code 404
+
+  if (!animal) {
+    return res.status(404).json({ error: 'Animal not found' })
+  }
+
+  const weights = db
+    .prepare(
+      `
+      SELECT *
+      FROM weights
+      WHERE animal_id = ?
+      ORDER BY date DESC, id DESC
+    `
+    )
+    .all(req.params.id)
+
+  return res.json(weights)
 })
 
 module.exports = router
