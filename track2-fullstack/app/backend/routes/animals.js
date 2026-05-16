@@ -8,12 +8,8 @@ router.get('/', (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 0, 0)
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100)
   const offset = page * limit
-  // This will help fix the N + 1 queries issue
-
-  // This prevents inconsistent data in the long run
-  // and allows for faster performance as thousands
-  // of queries will be sent rather than one efficent
-  // query
+  // Avoid the N+1 query pattern by fetching animals and their latest
+  // health event in one query instead of running one extra query per animal.
 
   const rows = db
     .prepare(
@@ -31,7 +27,7 @@ router.get('/', (req, res) => {
         SELECT id
         FROM health_events
         WHERE health_events.animal_id = animals.id
-        ORDER BY date DESC
+        ORDER BY date DESC, id DESC
         LIMIT 1
       )
     LIMIT ? OFFSET ?
@@ -68,13 +64,15 @@ router.post('/', (req, res) => {
     return res.status(400).json({ error: 'name and tag_number are required' })
   }
 
-  // For this one we'd want to have like our data
-  // being inserted before we can formally do the update count so that tag_numbers is duplicated which causes
-  // Full atomicity is later enforced using database transactions, and this process will help the program
-  // reduce the risk of inconsistent database state.
+  // For this one we'd want to have our data inserted and the paddock count
+  // updated as one logical operation.
+  // Full atomicity is enforced using manual SQLite transactions, and this
+  // helps reduce the risk of inconsistent database state.
 
   // We'll add error handling by preventing duplicate tag_number.
   try {
+    db.exec('BEGIN')
+
     const result = db
       .prepare(
         'INSERT INTO animals (name, tag_number, breed, date_of_birth, paddock_id) VALUES (?, ?, ?, ?, ?)'
@@ -86,36 +84,43 @@ router.post('/', (req, res) => {
         date_of_birth ?? null,
         paddock_id ?? null
       )
-    // Now we replace the if-statement, we want to check if it's not null and  not undefined. Now for this let's handle the cases where the paddock_id has a better if-statement that handle
 
+    // Now we replace the if-statement, we want to check if it's not null
+    // and not undefined. This avoids relying on JavaScript truthy/falsy checks.
     if (paddock_id !== null && paddock_id !== undefined) {
       db.prepare(
         'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
       ).run(paddock_id)
     }
 
+    db.exec('COMMIT')
+
     const animal = db
       .prepare('SELECT * FROM animals WHERE id = ?')
       .get(result.lastInsertRowid)
-    res.json(animal)
+
+    return res.status(201).json(animal)
   } catch (error) {
-    // Return API reponse when unique constraint is violated for tag_number
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-      return res.status(400).json({
+    db.exec('ROLLBACK')
+
+    // Return API response when unique constraint is violated for tag_number.
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({
         error: 'tag_number already exists'
       })
     }
 
-    throw error
+    return res.status(500).json({
+      error: 'Failed to create animal'
+    })
   }
 })
-
 router.get('/:id', (req, res) => {
   const animal = db
     .prepare('SELECT * FROM animals WHERE id = ?')
     .get(req.params.id)
   if (!animal) return res.status(404).json({ error: 'Animal not found' })
-  res.json(animal)
+  return res.json(animal)
 })
 
 router.put('/:id', (req, res) => {
@@ -138,7 +143,8 @@ router.put('/:id', (req, res) => {
   // If either operation fails, SQLite rolls back all changes,
   // preserving database consistency and integrity.
 
-  const updateAnimalData = db.transaction(() => {
+  try {
+    db.exec('BEGIN')
     // Next thing we need to fix for bug as it doesn't decrement the old paddock count which is a issue
     // I brought up audit.md and we need to change the conditonal statement as should not check for truthiness
     // which was a bug I fixed earlier so we can use that as a way for us to fix this conditional statement
@@ -156,12 +162,13 @@ router.put('/:id', (req, res) => {
         ).run(updates.paddock_id)
       }
     }
+
     db.prepare(
       `
     UPDATE animals
     SET name = ?, tag_number = ?, breed = ?, date_of_birth = ?, paddock_id = ?
     WHERE id = ?
-  `
+    `
     ).run(
       updates.name,
       updates.tag_number,
@@ -170,8 +177,21 @@ router.put('/:id', (req, res) => {
       updates.paddock_id,
       req.params.id
     )
-  })
-  updateAnimalData()
+
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({
+        error: 'tag_number already exists'
+      })
+    }
+
+    return res.status(500).json({
+      error: 'Failed to update animal'
+    })
+  }
 
   const updated = db
     .prepare('SELECT * FROM animals WHERE id = ?')
@@ -187,16 +207,25 @@ router.delete('/:id', (req, res) => {
 
   //  ATOMICITY FIX:
   // Similar to the updateAnimalData
+  try {
+    db.exec('BEGIN')
 
-  const updateAnimalDataDelete = db.transaction(() => {
     if (animal.paddock_id !== null && animal.paddock_id !== undefined) {
       db.prepare(
         'UPDATE paddocks SET animal_count = animal_count - 1 WHERE id = ?'
       ).run(animal.paddock_id)
     }
+
     db.prepare('DELETE FROM animals WHERE id = ?').run(req.params.id)
-  })
-  updateAnimalDataDelete()
+
+    db.exec('COMMIT')
+  } catch (error) {
+    db.exec('ROLLBACK')
+
+    return res.status(500).json({
+      error: 'Failed to delete animal'
+    })
+  }
 
   res.json({ message: 'deleted' })
 })
