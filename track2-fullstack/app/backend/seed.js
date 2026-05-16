@@ -1,48 +1,57 @@
-const { db, initDb } = require('./db');
+const { db, initDb } = require('./db')
 
-initDb();
+initDb()
 
-db.exec('DELETE FROM health_events; DELETE FROM animals; DELETE FROM paddocks;');
+db.exec(`
+  DELETE FROM weights;
+  DELETE FROM health_events;
+  DELETE FROM animals;
+  DELETE FROM paddocks;
+`)
 
-const insertPaddock = db.prepare('INSERT INTO paddocks (name, capacity, animal_count) VALUES (?, ?, 0)');
-const northId = insertPaddock.run('North Paddock', 50).lastInsertRowid;
-const southId = insertPaddock.run('South Paddock', 30).lastInsertRowid;
-const eastId  = insertPaddock.run('East Paddock',  40).lastInsertRowid;
-insertPaddock.run('Holding Pen', 10);
+const insertPaddock = db.prepare(
+  'INSERT INTO paddocks (name, capacity, animal_count) VALUES (?, ?, 0)'
+)
+const northId = insertPaddock.run('North Paddock', 50).lastInsertRowid
+const southId = insertPaddock.run('South Paddock', 30).lastInsertRowid
+const eastId = insertPaddock.run('East Paddock', 40).lastInsertRowid
+insertPaddock.run('Holding Pen', 10)
 
 const insertAnimal = db.prepare(
   'INSERT INTO animals (name, tag_number, breed, date_of_birth, paddock_id) VALUES (?, ?, ?, ?, ?)'
-);
+)
 
 const animalsData = [
-  ['Bella', 'TAG-001', 'Merino',  '2021-03-14', northId],
-  ['Daisy', 'TAG-002', 'Dorper',  '2020-07-22', northId],
-  ['Molly', 'TAG-003', 'Merino',  '2022-01-05', southId],
+  ['Bella', 'TAG-001', 'Merino', '2021-03-14', northId],
+  ['Daisy', 'TAG-002', 'Dorper', '2020-07-22', northId],
+  ['Molly', 'TAG-003', 'Merino', '2022-01-05', southId],
   ['Rosie', 'TAG-004', 'Suffolk', '2021-09-18', southId],
-  ['Lucy',  'TAG-005', 'Merino',  '2020-11-30', eastId],
-  ['Penny', 'TAG-006', 'Dorper',  '2022-04-12', eastId],
-  ['Nora',  'TAG-007', 'Suffolk', '2021-06-08', northId],
-  ['Hazel', 'TAG-008', 'Merino',  '2020-02-27', southId],
-  ['Ivy',   'TAG-009', 'Dorper',  '2022-08-15', eastId],
-  ['June',  'TAG-010', 'Merino',  '2021-12-03', northId],
-  ['Fern',  'TAG-011', 'Suffolk', '2020-05-19', southId],
-  ['Gwen',  'TAG-012', 'Merino',  '2022-02-07', eastId],
-];
+  ['Lucy', 'TAG-005', 'Merino', '2020-11-30', eastId],
+  ['Penny', 'TAG-006', 'Dorper', '2022-04-12', eastId],
+  ['Nora', 'TAG-007', 'Suffolk', '2021-06-08', northId],
+  ['Hazel', 'TAG-008', 'Merino', '2020-02-27', southId],
+  ['Ivy', 'TAG-009', 'Dorper', '2022-08-15', eastId],
+  ['June', 'TAG-010', 'Merino', '2021-12-03', northId],
+  ['Fern', 'TAG-011', 'Suffolk', '2020-05-19', southId],
+  ['Gwen', 'TAG-012', 'Merino', '2022-02-07', eastId]
+]
 
-const updateCount = db.prepare('UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?');
+const updateCount = db.prepare(
+  'UPDATE paddocks SET animal_count = animal_count + 1 WHERE id = ?'
+)
 
 const animalIds = animalsData.map(([name, tag, breed, dob, paddockId]) => {
-  const id = insertAnimal.run(name, tag, breed, dob, paddockId).lastInsertRowid;
-  updateCount.run(paddockId);
-  return id;
-});
+  const id = insertAnimal.run(name, tag, breed, dob, paddockId).lastInsertRowid
+  updateCount.run(paddockId)
+  return id
+})
 
 const insertEvent = db.prepare(
   'INSERT INTO health_events (animal_id, event_type, notes, date, vet_name) VALUES (?, ?, ?, ?, ?)'
-);
+)
 
-const types = ['vaccination', 'checkup', 'treatment'];
-const vets  = ['Dr. McGregor', 'Dr. Walsh'];
+const types = ['vaccination', 'checkup', 'treatment']
+const vets = ['Dr. McGregor', 'Dr. Walsh']
 
 animalIds.slice(0, 6).forEach((animalId, i) => {
   insertEvent.run(
@@ -51,7 +60,7 @@ animalIds.slice(0, 6).forEach((animalId, i) => {
     `Routine ${types[i % 3]}`,
     `2024-${String((i % 9) + 1).padStart(2, '0')}-15`,
     vets[i % 2]
-  );
-});
+  )
+})
 
-console.log('Database seeded successfully.');
+console.log('Database seeded successfully.')

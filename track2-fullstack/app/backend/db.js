@@ -18,8 +18,8 @@ function initDb () {
     CREATE TABLE IF NOT EXISTS paddocks (
       id           INTEGER PRIMARY KEY AUTOINCREMENT,
       name         TEXT    NOT NULL UNIQUE,
-      capacity     INTEGER NOT NULL,
-      animal_count INTEGER NOT NULL DEFAULT 0
+      capacity     INTEGER NOT NULL CHECK(capacity > 0),
+      animal_count INTEGER NOT NULL DEFAULT 0 CHECK(animal_count >= 0)
     );
 
     CREATE TABLE IF NOT EXISTS animals (
@@ -41,12 +41,12 @@ function initDb () {
     );
 
     CREATE TABLE IF NOT EXISTS weights (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  animal_id  INTEGER NOT NULL REFERENCES animals(id) ON DELETE CASCADE,
-  weight_kg  REAL    NOT NULL CHECK(weight_kg > 0),
-  date       TEXT    NOT NULL,
-  notes      TEXT
-);
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      animal_id  INTEGER NOT NULL REFERENCES animals(id) ON DELETE CASCADE,
+      weight_kg  REAL    NOT NULL CHECK(weight_kg > 0),
+      date       TEXT    NOT NULL,
+      notes      TEXT
+    );
   `)
 }
 
