@@ -1,6 +1,6 @@
 // This is how we connect database Sqlite, so if we wanna do PostgreSQL
 // const dbPath = process.env.FARMTRACKER_DB_PATH || path.join(__dirname, 'farmtracker.db');
-// I would ultimately prefer PostegreSQL for a better multi-user handling, and it would be optimal for huge production as it would be able to handle many users
+// I would ultimately prefer PostgreSQL for a better multi-user handling, and it would be optimal for huge production as it would be able to handle many users
 // as SQLite would be acceptable enough for the scope
 // of this project.
 const { DatabaseSync } = require('node:sqlite')
