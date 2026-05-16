@@ -130,3 +130,40 @@ test('POST /api/animals/:id/health-events creates an event', async () => {
   assert.equal(body.event_type, 'checkup')
   assert.equal(body.animal_id, id)
 })
+
+
+/**
+ * Description: Helper function that 
+//  sends a PUT request to Test API
+ * @param {string} path - API path to the request relative to the baseURL
+ * @param {*} body  - JSON body
+ * @returns 
+ */
+
+async function put(path, body) {
+  const res = await fetch(baseUrl + path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  return { status: res.status, body: await res.json() }
+}
+/**
+ * 
+ * @author Brian Louis Salinas
+ * Sends a DELETE request to the test API.
+ *
+ * Used in integration tests to delete an existing resource.
+ *
+ * @param {string} path - The API path to request, relative to baseUrl, simialr to the put function
+ * 
+ * @returns {Promise<{status: number, body: Object}>} The HTTP status and parsed JSON response body, and helps delete data
+ */
+async function del(path) {
+  const res = await fetch(baseUrl + path, {
+    method: 'DELETE',
+  })
+
+  return { status: res.status, body: await res.json() }
+}
