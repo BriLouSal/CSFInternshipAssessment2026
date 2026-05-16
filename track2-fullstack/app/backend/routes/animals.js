@@ -8,30 +8,58 @@ router.get('/', (req, res) => {
   const page = Math.max(parseInt(req.query.page) || 0, 0)
   const limit = Math.min(Math.max(parseInt(req.query.limit) || 10, 1), 100)
   const offset = page * limit
+
   // Avoid the N+1 query pattern by fetching animals and their latest
   // health event in one query instead of running one extra query per animal.
-
+  //
+  // WEIGHT FEATURE CHANGE:
+  // Also fetch the latest weight record in the same query.
+  // This lets animals.html display the "Latest Weight" column.
   const rows = db
     .prepare(
       `
-    SELECT
-      animals.*,
-      health_events.id AS latest_health_event_id,
-      health_events.event_type AS latest_health_event_type,
-      health_events.notes AS latest_health_event_notes,
-      health_events.date AS latest_health_event_date,
-      health_events.vet_name AS latest_health_event_vet_name
-    FROM animals
-    LEFT JOIN health_events
-      ON health_events.id = (
-        SELECT id
-        FROM health_events
-        WHERE health_events.animal_id = animals.id
-        ORDER BY date DESC, id DESC
-        LIMIT 1
-      )
-    LIMIT ? OFFSET ?
-  `
+      SELECT
+        animals.*,
+
+        health_events.id AS latest_health_event_id,
+        health_events.event_type AS latest_health_event_type,
+        health_events.notes AS latest_health_event_notes,
+        health_events.date AS latest_health_event_date,
+        health_events.vet_name AS latest_health_event_vet_name,
+
+        -- WEIGHT FEATURE CHANGE:
+        -- Select latest weight fields for each animal.
+        weights.id AS latest_weight_id,
+        weights.weight_kg AS latest_weight_kg,
+        weights.date AS latest_weight_date,
+        weights.notes AS latest_weight_notes
+
+      FROM animals
+
+      LEFT JOIN health_events
+        ON health_events.id = (
+          SELECT id
+          FROM health_events
+          WHERE health_events.animal_id = animals.id
+          ORDER BY date DESC, id DESC
+          LIMIT 1
+        )
+
+      -- WEIGHT FEATURE CHANGE:
+      -- Join the newest weight record for each animal.
+      -- date DESC gets the newest measurement date.
+      -- id DESC breaks ties when multiple weights exist on the same date.
+      LEFT JOIN weights
+        ON weights.id = (
+          SELECT id
+          FROM weights
+          WHERE weights.animal_id = animals.id
+          ORDER BY date DESC, id DESC
+          LIMIT 1
+        )
+
+      LIMIT ? OFFSET ?
+      `
     )
     .all(limit, offset)
 
@@ -71,7 +99,6 @@ router.get('/', (req, res) => {
 
   res.json(result)
 })
-
 router.post('/', (req, res) => {
   const { name, tag_number, breed, date_of_birth, paddock_id } = req.body
 

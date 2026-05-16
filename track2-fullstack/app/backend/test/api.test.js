@@ -97,14 +97,6 @@ test('GET /api/paddocks returns an array', async () => {
   assert.ok(Array.isArray(body))
 })
 
-test('GET /api/animals returns animals with latest_health_event field', async () => {
-  const { status, body } = await get('/animals?page=0&limit=5')
-  assert.equal(status, 200)
-  assert.ok(Array.isArray(body))
-  assert.ok(body.length > 0)
-  assert.ok('latest_health_event' in body[0])
-})
-
 test('GET /api/animals/:id returns a single animal', async () => {
   const { body: animals } = await get('/animals?page=0&limit=1')
   const id = animals[0].id
@@ -165,6 +157,28 @@ async function del (path) {
   })
 
   return { status: res.status, body: await res.json() }
+}
+/**
+ * @author Brian Louis Salinas
+ * Description: Creates a fresh test animal with a unique tag_number.
+ *
+ * This prevents tests from reusing seeded animals and avoids duplicate tag_number
+ * conflicts between test cases.
+ *
+ * @param {Object} overrides - Optional fields to override on the animal payload.
+ * @returns {Promise<{status: number, body: Object}>} Created animal response.
+ */
+async function createTestAnimal (overrides = {}) {
+  const unique = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+
+  return post('/animals', {
+    name: 'Test Animal',
+    tag_number: `TEST-${unique}`,
+    breed: 'Merino',
+    date_of_birth: '2022-01-01',
+    paddock_id: null,
+    ...overrides
+  })
 }
 
 /**
@@ -419,4 +433,242 @@ test('POST /api/animals returns conflict for duplicate tag_number', async () => 
   // Assert
   assert.equal(status, 409)
   assert.equal(body.error, 'tag_number already exists')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures a weight record cannot be created without a date.
+ */
+test('POST /api/animals/:id/weights returns 400 when date is missing', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Missing Date Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  // Act
+  const { status, body } = await post(`/animals/${animalId}/weights`, {
+    weight_kg: 45.2,
+    notes: 'Missing date'
+  })
+
+  // Assert
+  assert.equal(status, 400)
+  assert.equal(body.error, 'date is required')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures GET /animals includes the latest weight after a weight is logged.
+ *
+ * This attacks the integration between POST /weights and the animal list page.
+ */
+test('GET /api/animals returns latest_weight after a weight is logged', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Latest Weight Integration Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  await post(`/animals/${animalId}/weights`, {
+    weight_kg: 41.5,
+    date: '2024-10-01',
+    notes: 'Older weight'
+  })
+
+  await post(`/animals/${animalId}/weights`, {
+    weight_kg: 48.9,
+    date: '2024-12-01',
+    notes: 'Latest weight'
+  })
+
+  // Act
+  const { status, body } = await get('/animals?page=0&limit=100')
+  const animal = body.find(a => a.id === animalId)
+
+  // Assert
+  assert.equal(status, 200)
+  assert.ok(animal)
+  assert.ok(animal.latest_weight)
+  assert.equal(animal.latest_weight.weight_kg, 48.9)
+  assert.equal(animal.latest_weight.date, '2024-12-01')
+  assert.equal(animal.latest_weight.notes, 'Latest weight')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures same-day weight records are ordered by newest inserted record first.
+ *
+ * This protects duplicate same-day weigh-ins, where date alone is not enough
+ * to determine which record should appear first.
+ */
+test('GET /api/animals/:id/weights orders same-date records by newest inserted first', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Same Date History Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  const first = await post(`/animals/${animalId}/weights`, {
+    weight_kg: 40,
+    date: '2024-11-15',
+    notes: 'First same-day record'
+  })
+
+  const second = await post(`/animals/${animalId}/weights`, {
+    weight_kg: 42,
+    date: '2024-11-15',
+    notes: 'Second same-day record'
+  })
+
+  // Act
+  const { status, body } = await get(`/animals/${animalId}/weights`)
+
+  // Assert
+  assert.equal(status, 200)
+  assert.equal(body.length, 2)
+
+  assert.equal(body[0].id, second.body.id)
+  assert.equal(body[0].weight_kg, 42)
+  assert.equal(body[0].notes, 'Second same-day record')
+
+  assert.equal(body[1].id, first.body.id)
+  assert.equal(body[1].weight_kg, 40)
+  assert.equal(body[1].notes, 'First same-day record')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures latest_weight on GET /animals uses newest inserted record
+ * when multiple weights share the same date.
+ */
+test('GET /api/animals latest_weight uses newest record when weight dates match', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Same Date Latest Weight Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  await post(`/animals/${animalId}/weights`, {
+    weight_kg: 50,
+    date: '2024-12-01',
+    notes: 'First same-day weight'
+  })
+
+  await post(`/animals/${animalId}/weights`, {
+    weight_kg: 55,
+    date: '2024-12-01',
+    notes: 'Second same-day weight'
+  })
+
+  // Act
+  const { status, body } = await get('/animals?page=0&limit=100')
+  const animal = body.find(a => a.id === animalId)
+
+  // Assert
+  assert.equal(status, 200)
+  assert.ok(animal)
+  assert.ok(animal.latest_weight)
+  assert.equal(animal.latest_weight.weight_kg, 55)
+  assert.equal(animal.latest_weight.date, '2024-12-01')
+  assert.equal(animal.latest_weight.notes, 'Second same-day weight')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures notes are optional when logging a weight.
+ */
+test('POST /api/animals/:id/weights accepts missing notes', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Missing Notes Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  // Act
+  const { status, body } = await post(`/animals/${animalId}/weights`, {
+    weight_kg: 38.7,
+    date: '2024-12-01'
+  })
+
+  // Assert
+  assert.equal(status, 201)
+  assert.equal(body.animal_id, animalId)
+  assert.equal(body.weight_kg, 38.7)
+  assert.equal(body.date, '2024-12-01')
+  assert.equal(body.notes, null)
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures zero is rejected because weight must be strictly positive.
+ */
+test('POST /api/animals/:id/weights returns 422 when weight_kg is zero', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Zero Weight Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  // Act
+  const { status, body } = await post(`/animals/${animalId}/weights`, {
+    weight_kg: 0,
+    date: '2024-11-15'
+  })
+
+  // Assert
+  assert.equal(status, 422)
+  assert.equal(body.error, 'weight_kg is required and must be positive')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Ensures empty string cannot bypass weight validation.
+ */
+test('POST /api/animals/:id/weights returns 422 when weight_kg is empty string', async () => {
+  // Arrange
+  const createAnimal = await createTestAnimal({
+    name: 'Empty String Weight Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  // Act
+  const { status, body } = await post(`/animals/${animalId}/weights`, {
+    weight_kg: '',
+    date: '2024-11-15'
+  })
+
+  // Assert
+  assert.equal(status, 422)
+  assert.equal(body.error, 'weight_kg is required and must be positive')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Verifies that the animal list endpoint returns animals with
+ * the latest summary fields required by the frontend.
+ *
+ * This test checks that each animal response includes:
+ * - latest_health_event, used by the Animals table
+ * - latest_weight, used by the Latest Weight column
+ *
+ * It protects the frontend from silently showing missing summary data when
+ * the backend response shape changes.
+ */
+test('GET /api/animals returns animals with latest summary fields', async () => {
+  const { status, body } = await get('/animals?page=0&limit=5')
+
+  assert.equal(status, 200)
+  assert.ok(Array.isArray(body))
+  assert.ok(body.length > 0)
+
+  assert.ok('latest_health_event' in body[0])
+  assert.ok('latest_weight' in body[0])
 })
