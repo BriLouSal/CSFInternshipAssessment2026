@@ -1,5 +1,25 @@
 const API_BASE = '/api';
 
+
+/**
+ * 
+ * @param {*} value 
+ * @returns 
+ */
+
+function escapeHtml(value) {
+  if (value === null || value === undefined || value === '') {
+    return '—'
+  }
+
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
 async function parseResponse(res) {
   const body = await res.json().catch(() => null);
 

@@ -1,48 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FarmTracker</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-  <header>
-    <h1>FarmTracker</h1>
-    <nav>
-      <a href="index.html" class="active">Paddocks</a>
-      <a href="animals.html">Animals</a>
-    </nav>
-  </header>
-  <main>
-    <div class="page-header">
-      <h2>Paddocks</h2>
-    </div>
-    <div id="paddocks-grid" class="card-grid">
-      <p class="loading">Loading…</p>
-    </div>
-  </main>
-  <script src="app.js"></script>
-  <script>
-    async function loadPaddocks() {
-      const paddocks = await api.get('/paddocks');
-      const grid = document.getElementById('paddocks-grid');
-      if (!paddocks.length) {
-        grid.innerHTML = '<p class="empty">No paddocks found.</p>';
-        return;
-      }
-      grid.innerHTML = paddocks.map(p => `
-        <div class="card">
-          <h3>${p.name}</h3>
-          <p class="stat">${p.animal_count} / ${p.capacity} animals</p>
-          <div class="capacity-bar">
-            <div class="capacity-fill" style="width: ${Math.min(100, Math.round((p.animal_count / p.capacity) * 100))}%"></div>
-          </div>
-        </div>
-      `).join('');
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FarmTracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>FarmTracker</h1>
+      <nav>
+        <a href="index.html" class="active">Paddocks</a>
+        <a href="animals.html">Animals</a>
+      </nav>
+    </header>
+    <main>
+      <div class="page-header">
+        <h2>Paddocks</h2>
+      </div>
+      <div id="paddocks-grid" class="card-grid">
+        <p class="loading">Loading…</p>
+      </div>
+    </main>
+    <script src="app.js"></script>
+    <script>
+      async function loadPaddocks() {
+        const paddocks = await api.get("/paddocks");
+        const grid = document.getElementById("paddocks-grid");
+        if (!paddocks.length) {
+          grid.innerHTML = '<p class="empty">No paddocks found.</p>';
+          return;
+        }
+        grid.innerHTML = paddocks
+          .map((p) => {
+            const capacityPercent = Math.min(
+              100,
+              Math.max(
+                0,
+                Math.round((Number(p.animal_count) / Number(p.capacity)) * 100),
+              ),
+            );
 
-    loadPaddocks();
-  </script>
-</body>
+            return `
+    <div class="card">
+      <h3>${escapeHtml(p.name)}</h3>
+      <p class="stat">${escapeHtml(p.animal_count)} / ${escapeHtml(p.capacity)} animals</p>
+      <div class="capacity-bar">
+        <div class="capacity-fill" style="width: ${capacityPercent}%"></div>
+      </div>
+    </div>
+  `;
+          })
+          .join("");
+      }
+
+      loadPaddocks();
+    </script>
+  </body>
 </html>
