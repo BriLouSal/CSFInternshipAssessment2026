@@ -9,7 +9,7 @@ A livestock record management application for tracking animals, paddock assignme
 ## Setup
 
 ```bash
-cd backend
+cd track2-fullstack/app/backend
 npm install
 node seed.js
 npm start
