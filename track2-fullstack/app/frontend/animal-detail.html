@@ -6,6 +6,7 @@
     <title>Animal — FarmTracker</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   </head>
 
   <body>
@@ -298,16 +299,34 @@
 
           const data = Object.fromEntries(new FormData(event.target));
 
-          await api.post(`/animals/${animalId}/health-events`, data);
+          try {
+            const createdEvent = await api.post(
+              `/animals/${animalId}/health-events`,
+              data,
+            );
 
-          event.target.reset();
+            event.target.reset();
 
-          const today = new Date().toISOString().slice(0, 10);
-          event.target.date.value = today;
+            const today = new Date().toISOString().slice(0, 10);
+            event.target.date.value = today;
 
-          await loadEvents();
+            await loadEvents();
+
+            Swal.fire({
+              icon: "success",
+              title: "Health event logged",
+              text: `${createdEvent.event_type} was saved successfully.`,
+              timer: 1800,
+              showConfirmButton: false,
+            });
+          } catch (error) {
+            Swal.fire({
+              icon: "error",
+              title: "Could not log health event",
+              text: error.message || "Please check the form and try again.",
+            });
+          }
         });
-
       document
         .getElementById("weight-form")
         .addEventListener("submit", async (event) => {
@@ -316,16 +335,34 @@
           const data = Object.fromEntries(new FormData(event.target));
           data.weight_kg = Number(data.weight_kg);
 
-          await api.post(`/animals/${animalId}/weights`, data);
+          try {
+            const createdWeight = await api.post(
+              `/animals/${animalId}/weights`,
+              data,
+            );
 
-          event.target.reset();
+            event.target.reset();
 
-          const today = new Date().toISOString().slice(0, 10);
-          event.target.date.value = today;
+            const today = new Date().toISOString().slice(0, 10);
+            event.target.date.value = today;
 
-          await loadWeights();
+            await loadWeights();
+
+            Swal.fire({
+              icon: "success",
+              title: "Weight logged",
+              text: `${createdWeight.weight_kg} kg was saved successfully.`,
+              timer: 1800,
+              showConfirmButton: false,
+            });
+          } catch (error) {
+            Swal.fire({
+              icon: "error",
+              title: "Could not log weight",
+              text: error.message || "Please check the form and try again.",
+            });
+          }
         });
-
       load();
     </script>
   </body>
