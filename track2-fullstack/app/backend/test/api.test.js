@@ -672,3 +672,72 @@ test('GET /api/animals returns animals with latest summary fields', async () => 
   assert.ok('latest_health_event' in body[0])
   assert.ok('latest_weight' in body[0])
 })
+
+/**
+ * @author Brian Salinas
+ * Description: Check for  array weight and reject it
+ */
+test('POST /api/animals/:id/weights returns 422 when weight_kg is an array', async () => {
+  const createAnimal = await createTestAnimal({
+    name: 'Array Weight Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  const { status, body } = await post(`/animals/${animalId}/weights`, {
+    weight_kg: [45.2],
+    date: '2024-11-15'
+  })
+
+  assert.equal(status, 422)
+  assert.equal(body.error, 'weight_kg is required and must be positive')
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Tests for invalid data and prove it doesn't enter the database
+ */
+test('POST /api/animals/:id/weights does not create record when validation fails', async () => {
+  const createAnimal = await createTestAnimal({
+    name: 'Failed Insert Side Effect Test'
+  })
+
+  const animalId = createAnimal.body.id
+
+  const before = await get(`/animals/${animalId}/weights`)
+
+  const invalidPost = await post(`/animals/${animalId}/weights`, {
+    weight_kg: -99,
+    date: '2024-11-15',
+    notes: 'Should not insert'
+  })
+
+  const after = await get(`/animals/${animalId}/weights`)
+
+  assert.equal(invalidPost.status, 422)
+  assert.equal(before.body.length, 0)
+  assert.equal(after.body.length, 0)
+})
+
+/**
+ * @author Brian Louis Salinas
+ * Description: Tests against SQL injection and not breaking the DB
+ */
+test('POST /api/animals safely stores SQL-like input as text', async () => {
+  const payload = {
+    name: "Robert'); DROP TABLE animals;--",
+    tag_number: `SQL-${Date.now()}`,
+    breed: 'Merino',
+    date_of_birth: '2022-01-01',
+    paddock_id: null
+  }
+
+  const createResult = await post('/animals', payload)
+  const animalsResult = await get('/animals?page=0&limit=100')
+
+  const created = animalsResult.body.find(a => a.id === createResult.body.id)
+
+  assert.equal(createResult.status, 201)
+  assert.ok(created)
+  assert.equal(created.name, payload.name)
+})
