@@ -129,3 +129,74 @@ input:focus, select:focus { outline: 2px solid #4a8c2a; border-color: transparen
 
 .loading { color: #aaa; font-size: 0.9rem; }
 .empty { color: #aaa; font-size: 0.875rem; }
+
+/* Section card layout */
+#health-section,
+#weight-section {
+  background: white;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+}
+
+/* Avoid double-card look because tables already have box-shadow */
+#health-section table,
+#weight-section table {
+  box-shadow: none;
+  border: 1px solid #eee;
+  margin-bottom: 1rem;
+}
+
+/* Header row for Weight History + Latest weight */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.section-header h3 {
+  margin-bottom: 0;
+}
+
+.latest-weight {
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.latest-weight strong {
+  color: #1a1a1a;
+}
+
+/* Let weight form use full section width */
+#weight-form,
+#event-form {
+  max-width: none;
+}
+
+/* Two-column form row for weight/date */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Make submit buttons span nicely */
+#event-form button,
+#weight-form button {
+  margin-top: 0.25rem;
+  width: 100%;
+}
+
+/* Mobile-friendly form layout */
+@media (max-width: 640px) {
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}

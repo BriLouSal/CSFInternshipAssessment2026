@@ -42,6 +42,21 @@ router.get('/', (req, res) => {
     breed: row.breed,
     date_of_birth: row.date_of_birth,
     paddock_id: row.paddock_id,
+
+    // WEIGHT FEATURE CHANGE:
+    // Add latest_weight to the API response.
+    // animals.html checks this field to display:
+    // "45.2 kg (2024-11-15)" or "—" if no weight exists.
+    latest_weight: row.latest_weight_id
+      ? {
+          id: row.latest_weight_id,
+          animal_id: row.id,
+          weight_kg: row.latest_weight_kg,
+          date: row.latest_weight_date,
+          notes: row.latest_weight_notes
+        }
+      : null,
+
     latest_health_event: row.latest_health_event_id
       ? {
           id: row.latest_health_event_id,
