@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Animal — FarmTracker</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
+
   <body>
     <header>
       <h1>FarmTracker</h1>
@@ -14,12 +16,14 @@
         <a href="animals.html" class="active">Animals</a>
       </nav>
     </header>
+
     <main>
       <a href="animals.html" class="back-link">← Back to Animals</a>
       <div id="animal-detail"><p class="loading">Loading…</p></div>
 
       <section id="health-section" style="display: none">
         <h3>Health Events</h3>
+
         <table>
           <thead>
             <tr>
@@ -33,9 +37,10 @@
         </table>
 
         <h4>Log Health Event</h4>
+
         <form id="event-form">
-          <label
-            >Type
+          <label>
+            Type
             <select name="event_type" required>
               <option value="vaccination">Vaccination</option>
               <option value="checkup">Checkup</option>
@@ -43,13 +48,22 @@
               <option value="injury">Injury</option>
             </select>
           </label>
-          <label>Date <input type="date" name="date" required /></label>
-          <label
-            >Vet <input type="text" name="vet_name" placeholder="Optional"
-          /></label>
-          <label
-            >Notes <input type="text" name="notes" placeholder="Optional"
-          /></label>
+
+          <label>
+            Date
+            <input type="date" name="date" required />
+          </label>
+
+          <label>
+            Vet
+            <input type="text" name="vet_name" placeholder="Optional" />
+          </label>
+
+          <label>
+            Notes
+            <input type="text" name="notes" placeholder="Optional" />
+          </label>
+
           <button type="submit">Log Event</button>
         </form>
       </section>
@@ -60,6 +74,13 @@
           <p id="latest-weight" class="latest-weight"></p>
         </div>
 
+        <div
+          id="weight-chart-card"
+          class="weight-chart-card"
+          style="display: none"
+        >
+          <canvas id="weight-chart"></canvas>
+        </div>
         <table>
           <thead>
             <tr>
@@ -72,6 +93,7 @@
         </table>
 
         <h4>Log New Weight</h4>
+
         <form id="weight-form">
           <div class="form-row">
             <label>
@@ -100,25 +122,30 @@
         </form>
       </section>
     </main>
+
     <script src="app.js"></script>
+
     <script>
       const params = new URLSearchParams(window.location.search);
       const animalId = params.get("id");
+
+      let weightChart = null;
 
       async function load() {
         const animal = await api.get(`/animals/${animalId}`);
 
         document.title = `${animal.name} — FarmTracker`;
+
         document.getElementById("animal-detail").innerHTML = `
-      <div class="animal-header">
-        <h2>${animal.name}<span class="tag">${animal.tag_number}</span></h2>
-      </div>
-      <dl>
-        <dt>Breed</dt>       <dd>${animal.breed ?? "—"}</dd>
-        <dt>Date of Birth</dt><dd>${animal.date_of_birth ?? "—"}</dd>
-        <dt>Paddock</dt>     <dd>${animal.paddock_id ?? "Unassigned"}</dd>
-      </dl>
-    `;
+          <div class="animal-header">
+            <h2>${animal.name}<span class="tag">${animal.tag_number}</span></h2>
+          </div>
+          <dl>
+            <dt>Breed</dt>       <dd>${animal.breed ?? "—"}</dd>
+            <dt>Date of Birth</dt><dd>${animal.date_of_birth ?? "—"}</dd>
+            <dt>Paddock</dt>     <dd>${animal.paddock_id ?? "Unassigned"}</dd>
+          </dl>
+        `;
 
         const today = new Date().toISOString().slice(0, 10);
 
@@ -139,14 +166,14 @@
         tbody.innerHTML = events.length
           ? events
               .map(
-                (e) => `
-          <tr>
-            <td>${e.date}</td>
-            <td>${e.event_type}</td>
-            <td>${e.vet_name ?? "—"}</td>
-            <td>${e.notes ?? "—"}</td>
-          </tr>
-        `,
+                (event) => `
+                  <tr>
+                    <td>${event.date}</td>
+                    <td>${event.event_type}</td>
+                    <td>${event.vet_name ?? "—"}</td>
+                    <td>${event.notes ?? "—"}</td>
+                  </tr>
+                `,
               )
               .join("")
           : '<tr><td colspan="4" class="empty">No events recorded.</td></tr>';
@@ -158,85 +185,16 @@
         const tbody = document.getElementById("weights-body");
         const latestWeight = document.getElementById("latest-weight");
 
-        if (weights.length > 0) {
-          const latest = weights[0];
-
-          latestWeight.innerHTML = `
-        <strong>Latest:</strong> ${latest.weight_kg} kg on ${latest.date}
-      `;
-
-          tbody.innerHTML = weights
-            .map(
-              (w) => `
-        <tr>
-          <td>${w.date}</td>
-          <td>${w.weight_kg}</td>
-          <td>${w.notes || "—"}</td>
-        </tr>
-      `,
-            )
-            .join("");
-        } else {
-          latestWeight.textContent = "No weight records yet.";
-
-          tbody.innerHTML = `
-        <tr>
-          <td colspan="3" class="empty">No weights recorded.</td>
-        </tr>
-      `;
-        }
-      }
-
-      document
-        .getElementById("event-form")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-
-          const data = Object.fromEntries(new FormData(e.target));
-
-          await api.post(`/animals/${animalId}/health-events`, data);
-
-          e.target.reset();
-
-          const today = new Date().toISOString().slice(0, 10);
-          e.target.date.value = today;
-
-          await loadEvents();
-        });
-
-      document
-        .getElementById("weight-form")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-
-          const data = Object.fromEntries(new FormData(e.target));
-
-          data.weight_kg = Number(data.weight_kg);
-
-          await api.post(`/animals/${animalId}/weights`, data);
-
-          e.target.reset();
-
-          const today = new Date().toISOString().slice(0, 10);
-          e.target.date.value = today;
-
-          await loadWeights();
-        });
-
-      async function loadWeights() {
-        const weights = await api.get(`/animals/${animalId}/weights`);
-
-        const tbody = document.getElementById("weights-body");
-        const latestWeight = document.getElementById("latest-weight");
+        renderWeightChart(weights);
 
         if (!weights.length) {
           latestWeight.textContent = "No weight records yet.";
 
           tbody.innerHTML = `
-      <tr>
-        <td colspan="3" class="empty">No weights recorded yet.</td>
-      </tr>
-    `;
+            <tr>
+              <td colspan="3" class="empty">No weights recorded yet.</td>
+            </tr>
+          `;
 
           return;
         }
@@ -244,21 +202,129 @@
         const latest = weights[0];
 
         latestWeight.innerHTML = `
-    <strong>Latest:</strong> ${latest.weight_kg} kg on ${latest.date}
-  `;
+          <strong>Latest:</strong> ${latest.weight_kg} kg on ${latest.date}
+        `;
 
         tbody.innerHTML = weights
           .map(
-            (w) => `
-    <tr>
-      <td>${w.date}</td>
-      <td>${w.weight_kg}</td>
-      <td>${w.notes || "—"}</td>
-    </tr>
-  `,
+            (weight) => `
+              <tr>
+                <td>${weight.date}</td>
+                <td>${weight.weight_kg}</td>
+                <td>${weight.notes || "—"}</td>
+              </tr>
+            `,
           )
           .join("");
       }
+
+      function renderWeightChart(weights) {
+        const chartCard = document.getElementById("weight-chart-card");
+        const canvas = document.getElementById("weight-chart");
+
+        if (!chartCard || !canvas) return;
+
+        if (weightChart) {
+          weightChart.destroy();
+          weightChart = null;
+        }
+
+        if (!weights.length) {
+          chartCard.style.display = "none";
+          return;
+        }
+
+        chartCard.style.display = "block";
+
+        // Backend returns newest -> oldest.
+        // Chart should display oldest -> newest.
+        const chartWeights = [...weights].reverse();
+
+        const labels = chartWeights.map((weight) => weight.date);
+        const data = chartWeights.map((weight) => Number(weight.weight_kg));
+
+        weightChart = new Chart(canvas, {
+          type: "line",
+          data: {
+            labels,
+            datasets: [
+              {
+                label: "Weight (kg)",
+                data,
+                borderColor: "#0b7d3b",
+                backgroundColor: "#0b7d3b",
+                borderWidth: 2,
+                pointRadius: 4,
+                pointHoverRadius: 5,
+                tension: 0.3,
+                fill: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                display: false,
+              },
+            },
+            scales: {
+              y: {
+                title: {
+                  display: true,
+                  text: "Weight (kg)",
+                },
+                beginAtZero: false,
+                grid: {
+                  color: "#e5e5e0",
+                  borderDash: [4, 4],
+                },
+              },
+              x: {
+                grid: {
+                  color: "#e5e5e0",
+                  borderDash: [4, 4],
+                },
+              },
+            },
+          },
+        });
+      }
+      document
+        .getElementById("event-form")
+        .addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          const data = Object.fromEntries(new FormData(event.target));
+
+          await api.post(`/animals/${animalId}/health-events`, data);
+
+          event.target.reset();
+
+          const today = new Date().toISOString().slice(0, 10);
+          event.target.date.value = today;
+
+          await loadEvents();
+        });
+
+      document
+        .getElementById("weight-form")
+        .addEventListener("submit", async (event) => {
+          event.preventDefault();
+
+          const data = Object.fromEntries(new FormData(event.target));
+          data.weight_kg = Number(data.weight_kg);
+
+          await api.post(`/animals/${animalId}/weights`, data);
+
+          event.target.reset();
+
+          const today = new Date().toISOString().slice(0, 10);
+          event.target.date.value = today;
+
+          await loadWeights();
+        });
 
       load();
     </script>
